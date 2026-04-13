@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bouwgroep Voorbeeld — Pagina Niet Gevonden</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,900;1,900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ======================== HEADER ======================== -->
+  <header class="header">
+    <a href="index.html" class="header-logo visible" aria-label="Home">
+      <svg viewBox="0 0 200 60" xmlns="http://www.w3.org/2000/svg">
+        <rect width="200" height="60" rx="4" fill="var(--color-primary)" opacity="0.9"/>
+        <text x="100" y="38" text-anchor="middle" fill="var(--color-text)" font-family="var(--font-display)" font-size="24" font-weight="900">LOGO</text>
+      </svg>
+    </a>
+    <nav>
+      <ul class="nav-list">
+        <li><a href="index.html">Home</a></li>
+        <li><a href="work.html">Work</a></li>
+        <li><a href="blog.html">Blog</a></li>
+        <li><a href="about.html">Over Ons</a></li>
+        <li><a href="contact.html">Contact</a></li>
+      </ul>
+    </nav>
+    <button class="menu-btn" aria-label="Menu">
+      <span class="label-open">Menu</span>
+      <span class="label-close">Close</span>
+    </button>
+  </header>
+
+  <!-- Mobile menu -->
+  <div class="mobile-menu">
+    <div class="mobile-menu-backdrop"></div>
+    <div class="mobile-menu-panel">
+      <nav class="mobile-menu-nav">
+        <a href="index.html">Home</a>
+        <a href="work.html">Work</a>
+        <a href="blog.html">Blog</a>
+        <a href="about.html">Over Ons</a>
+        <a href="contact.html">Contact</a>
+      </nav>
+    </div>
+  </div>
+
+  <!-- ======================== 404 CONTENT ======================== -->
+  <div class="page-404">
+    <h1>404</h1>
+    <p>Oeps! Het lijkt erop dat je verdwaald bent... Maar geen zorgen, hier is een spelletje om de tijd te doden!</p>
+
+    <!-- Game info -->
+    <div class="game-info">
+      <span>Score: <span class="accent" id="score">0</span></span>
+      <span>Levens: <span class="accent" id="lives">3</span></span>
+    </div>
+
+    <!-- Game canvas -->
+    <canvas id="gameCanvas" class="game-canvas" width="600" height="450"></canvas>
+
+    <p style="font-size:0.875rem;opacity:0.5;margin-bottom:var(--sp-4)">
+      Gebruik je muis of vinger om de paddle te bewegen. Breek alle blokken!
+    </p>
+
+    <a href="index.html" class="back-home-btn">
+      &larr; Terug naar home
+    </a>
+  </div>
+
+  <!-- ======================== BREAKOUT GAME ======================== -->
+  <script>
+  (function() {
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const livesEl = document.getElementById('lives');
+
+    // Responsive canvas
+    function resizeCanvas() {
+      const maxW = Math.min(600, window.innerWidth - 40);
+      const ratio = 600 / 450;
+      canvas.style.width = maxW + 'px';
+      canvas.style.height = (maxW / ratio) + 'px';
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    // Colors from CSS variables
+    const colors = {
+      bg: '#2A2A2B',
+      text: '#E1E1C2',
+      primary: '#FF532C',
+      accent: '#0091CF',
+      dim: 'rgba(225, 225, 194, 0.3)',
+    };
+
+    // Game state
+    let score = 0;
+    let lives = 3;
+    let gameRunning = true;
+    let gameWon = false;
+
+    // Ball
+    const ball = {
+      x: 300,
+      y: 400,
+      dx: 4,
+      dy: -4,
+      radius: 8,
+      speed: 5,
+    };
+
+    // Paddle
+    const paddle = {
+      width: 90,
+      height: 14,
+      x: 255,
+      y: 430,
+    };
+
+    // Bricks
+    const brickConfig = {
+      rows: 5,
+      cols: 8,
+      width: 62,
+      height: 20,
+      padding: 8,
+      offsetTop: 50,
+      offsetLeft: 19,
+    };
+
+    const brickColors = [colors.primary, colors.primary, colors.accent, colors.accent, colors.text];
+
+    let bricks = [];
+
+    function initBricks() {
+      bricks = [];
+      for (let r = 0; r < brickConfig.rows; r++) {
+        bricks[r] = [];
+        for (let c = 0; c < brickConfig.cols; c++) {
+          bricks[r][c] = {
+            x: brickConfig.offsetLeft + c * (brickConfig.width + brickConfig.padding),
+            y: brickConfig.offsetTop + r * (brickConfig.height + brickConfig.padding),
+            alive: true,
+            color: brickColors[r],
+          };
+        }
+      }
+    }
+    initBricks();
+
+    // Mouse / touch tracking
+    let mouseX = paddle.x + paddle.width / 2;
+
+    canvas.addEventListener('mousemove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      mouseX = (e.clientX - rect.left) * scaleX;
+    });
+
+    canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      mouseX = (e.touches[0].clientX - rect.left) * scaleX;
+    }, { passive: false });
+
+    // Click to restart
+    canvas.addEventListener('click', () => {
+      if (!gameRunning) {
+        resetGame();
+      }
+    });
+
+    function resetGame() {
+      score = 0;
+      lives = 3;
+      gameRunning = true;
+      gameWon = false;
+      ball.x = 300;
+      ball.y = 400;
+      ball.dx = 4;
+      ball.dy = -4;
+      initBricks();
+      updateUI();
+    }
+
+    function updateUI() {
+      scoreEl.textContent = score;
+      livesEl.textContent = lives;
+    }
+
+    // Drawing functions
+    function drawBall() {
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+      ctx.fillStyle = colors.text;
+      ctx.fill();
+      ctx.closePath();
+    }
+
+    function drawPaddle() {
+      ctx.beginPath();
+      ctx.roundRect(paddle.x, paddle.y, paddle.width, paddle.height, 4);
+      ctx.fillStyle = colors.text;
+      ctx.fill();
+      ctx.closePath();
+    }
+
+    function drawBricks() {
+      for (let r = 0; r < brickConfig.rows; r++) {
+        for (let c = 0; c < brickConfig.cols; c++) {
+          const b = bricks[r][c];
+          if (!b.alive) continue;
+          ctx.beginPath();
+          ctx.roundRect(b.x, b.y, brickConfig.width, brickConfig.height, 3);
+          ctx.fillStyle = b.color;
+          ctx.fill();
+          ctx.closePath();
+        }
+      }
+    }
+
+    function drawMessage(line1, line2) {
+      ctx.fillStyle = colors.text;
+      ctx.font = '900 48px "Barlow Condensed", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(line1, 300, 210);
+      ctx.font = '500 16px "Inter", sans-serif';
+      ctx.fillStyle = colors.dim;
+      ctx.fillText(line2, 300, 245);
+    }
+
+    // Collision detection
+    function collisionDetection() {
+      for (let r = 0; r < brickConfig.rows; r++) {
+        for (let c = 0; c < brickConfig.cols; c++) {
+          const b = bricks[r][c];
+          if (!b.alive) continue;
+
+          if (
+            ball.x > b.x &&
+            ball.x < b.x + brickConfig.width &&
+            ball.y > b.y &&
+            ball.y < b.y + brickConfig.height
+          ) {
+            ball.dy = -ball.dy;
+            b.alive = false;
+            score += 10;
+            updateUI();
+
+            // Check win
+            const totalBricks = brickConfig.rows * brickConfig.cols;
+            if (score / 10 >= totalBricks) {
+              gameWon = true;
+              gameRunning = false;
+            }
+          }
+        }
+      }
+    }
+
+    // Game loop
+    function gameLoop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Background
+      ctx.fillStyle = colors.bg;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (!gameRunning) {
+        drawBricks();
+        drawPaddle();
+        if (gameWon) {
+          drawMessage('GEWONNEN!', 'Klik om opnieuw te spelen');
+        } else {
+          drawMessage('GAME OVER', 'Klik om opnieuw te spelen');
+        }
+        requestAnimationFrame(gameLoop);
+        return;
+      }
+
+      // Move paddle toward mouse
+      paddle.x = mouseX - paddle.width / 2;
+      paddle.x = Math.max(0, Math.min(canvas.width - paddle.width, paddle.x));
+
+      // Move ball
+      ball.x += ball.dx;
+      ball.y += ball.dy;
+
+      // Wall collisions
+      if (ball.x + ball.radius > canvas.width || ball.x - ball.radius < 0) {
+        ball.dx = -ball.dx;
+      }
+      if (ball.y - ball.radius < 0) {
+        ball.dy = -ball.dy;
+      }
+
+      // Paddle collision
+      if (
+        ball.y + ball.radius > paddle.y &&
+        ball.y + ball.radius < paddle.y + paddle.height + 5 &&
+        ball.x > paddle.x &&
+        ball.x < paddle.x + paddle.width
+      ) {
+        // Angle based on where ball hits paddle
+        const hitPos = (ball.x - paddle.x) / paddle.width; // 0 to 1
+        const angle = (hitPos - 0.5) * Math.PI * 0.7; // -63deg to +63deg
+        ball.dx = ball.speed * Math.sin(angle);
+        ball.dy = -ball.speed * Math.cos(angle);
+      }
+
+      // Ball out of bounds (bottom)
+      if (ball.y + ball.radius > canvas.height) {
+        lives--;
+        updateUI();
+        if (lives <= 0) {
+          gameRunning = false;
+        } else {
+          // Reset ball position
+          ball.x = paddle.x + paddle.width / 2;
+          ball.y = paddle.y - 20;
+          ball.dx = 4 * (Math.random() > 0.5 ? 1 : -1);
+          ball.dy = -4;
+        }
+      }
+
+      // Check brick collisions
+      collisionDetection();
+
+      // Draw everything
+      drawBricks();
+      drawBall();
+      drawPaddle();
+
+      // Score display on canvas
+      ctx.font = '900 14px "Barlow Condensed", sans-serif';
+      ctx.fillStyle = colors.dim;
+      ctx.textAlign = 'left';
+      ctx.fillText('SCORE: ' + score, 10, 25);
+      ctx.textAlign = 'right';
+      ctx.fillText('LEVENS: ' + lives, 590, 25);
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Start
+    gameLoop();
+
+    // Mobile menu (simplified for 404 page)
+    const btn = document.querySelector('.menu-btn');
+    const menu = document.querySelector('.mobile-menu');
+    if (btn && menu) {
+      btn.addEventListener('click', () => {
+        menu.classList.toggle('is-open');
+        btn.classList.toggle('is-open');
+      });
+      const backdrop = menu.querySelector('.mobile-menu-backdrop');
+      if (backdrop) {
+        backdrop.addEventListener('click', () => {
+          menu.classList.remove('is-open');
+          btn.classList.remove('is-open');
+        });
+      }
+      menu.querySelectorAll('a').forEach(link => {
+        link.addEventListener('click', () => {
+          menu.classList.remove('is-open');
+          btn.classList.remove('is-open');
+        });
+      });
+    }
+  })();
+  </script>
+
+  <!-- StudioLee credit badge -->
+  <a href="https://www.studiolee.nl" target="_blank" rel="nofollow noopener" style="position:fixed;bottom:14px;right:14px;z-index:9999;background:rgba(0,0,0,.85);color:#fff;padding:9px 18px;border-radius:99px;font-family:system-ui,sans-serif;font-size:12px;font-weight:600;letter-spacing:.04em;text-decoration:none;box-shadow:0 4px 16px rgba(0,0,0,.25);transition:transform .2s,background .2s;display:inline-flex;align-items:center;gap:6px" onmouseover="this.style.transform='translateY(-2px)';this.style.background='#cdfb52';this.style.color='#0a0a0a'" onmouseout="this.style.transform='translateY(0)';this.style.background='rgba(0,0,0,.85)';this.style.color='#fff'">Speciaal gemaakt voor aannemers door StudioLee.nl &nearr;</a>
+
+</body>
+</html>
